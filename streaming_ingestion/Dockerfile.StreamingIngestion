@@ -11,8 +11,12 @@ USER root
 # Getting PostgreSQL connector
 RUN wget https://jdbc.postgresql.org/download/postgresql-42.6.0.jar -O /opt/spark/jars/postgresql-42.6.0.jar
 
+# Expose Spark UI port
+EXPOSE 4040
+
 # Installing kafka and connector dependencies
 CMD ["spark-submit", \
+    "--conf", "spark.ui.host=0.0.0.0", \
     "--jars", "/opt/spark/jars/postgresql-42.6.0.jar", \
     "--packages", "org.apache.spark:spark-sql-kafka-0-10_2.12:3.4.0", \
     "/app/ingestion.py"]

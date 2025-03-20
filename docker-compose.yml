@@ -76,3 +76,5 @@ services:
         condition: service_healthy
       events_generator:
         condition: service_started
+    ports:
+      - "4040:4040"
