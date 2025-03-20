@@ -1,0 +1,78 @@
+version: '3.8'
+
+services:
+  kafka-server:
+    container_name: kafka-server
+    env_file:
+      - .env
+    environment:
+      KAFKA_PROCESS_ROLES: ${KAFKA_PROCESS_ROLES}
+      KAFKA_LISTENERS: PLAINTEXT://:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-server:9092
+    healthcheck:
+      test: "echo 'exit' | nc localhost 9092"
+      interval: 30s
+      timeout: 30s
+      retries: 3
+    image: apache/kafka:3.7.2
+    ports:
+      - "9092:9092"
+    command: |
+      bash -c "
+      echo ::::::::::::::::::::: Starting Zookeeper Server ::::::::::::::::::::: &&
+      /opt/kafka/bin/zookeeper-server-start.sh /opt/kafka/config/zookeeper.properties &
+      sleep 5 &&
+      echo ::::::::::::::::::::: Starting Kafka Server ::::::::::::::::::::: &&
+      /opt/kafka/bin/kafka-server-start.sh /opt/kafka/config/server.properties &
+      sleep 5 &&
+      echo ::::::::::::::::::::: Creating topic $TOPIC_NAME ::::::::::::::::::::: &&
+      /opt/kafka/bin/kafka-topics.sh --create --topic $TOPIC_NAME --bootstrap-server kafka-server:$KAFKA_PORT
+      wait
+      "
+
+  # # SQL storage
+  events_storage:
+    container_name: events_storage
+    depends_on:
+      kafka-server:
+        condition: service_healthy
+    environment:
+      POSTGRES_DB: events_storage
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "user", "-d", "events_storage"]
+      interval: 30s
+      retries: 3
+      timeout: 30s
+    image: postgres:13
+    ports:
+      - "5432:5432"
+    restart: always
+    volumes:
+      - ./streaming_ingestion/infrastructure/events_storage.sql:/docker-entrypoint-initdb.d/01_init.sql
+
+  # # lambda function
+  events_generator:
+    build:
+      context: events_generator/.
+      dockerfile: Dockerfile.Python
+    container_name: events_generator
+    depends_on:
+      kafka-server:
+        condition: service_healthy
+    env_file:
+      - .env
+    restart: on-failure
+
+  # spark application
+  streaming_ingestion:
+    build:
+      context: streaming_ingestion/.
+      dockerfile: Dockerfile.StreamingIngestion
+    container_name: streaming_ingestion
+    depends_on:
+      events_storage:
+        condition: service_healthy
+      events_generator:
+        condition: service_started
