@@ -38,8 +38,10 @@ São quatro serviços executando em conjunto:
 
 Na raiz do projeto, execute o comandos abaixo para os recursos correspondentes `em um terminal shell`:
 
-* **iniciando os serviços:**
+* **build e iniciando os serviços:**
 ```bash
+docker-compose build --no-cache
+
 docker-compose up -d # requisito para os recursos abaixo
 ```
 
